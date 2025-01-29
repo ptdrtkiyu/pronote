@@ -40,7 +40,7 @@ def init_db():
             CREATE TABLE IF NOT EXISTS notes (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 utilisateur_id INT,
-                note TEXT NOT NULL,
+                note FLOAT NOT NULL,
                 matiere ENUM('Français', 'Maths', 'Histoire', 'Géographie') NOT NULL,  -- Ajout de la colonne matiere
 
                 date_note TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
