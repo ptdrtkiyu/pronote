@@ -20,7 +20,10 @@
             <p>Aucune note trouvée.</p>
         {% endif %}
 
-        <a href="{{ url_for('ajouter_note') }}">Ajouter une note</a>
+        {% if role == 'prof' %}
+            <a href="{{ url_for('ajouter_note') }}">Ajouter une note</a>
+        {% endif %}
+
         <a href="{{ url_for('deconnexion') }}">Déconnexion</a>
     {% else %}
         <h1>Bienvenue sur notre site !</h1>

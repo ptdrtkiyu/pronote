@@ -49,7 +49,9 @@ def init_db():
 
 @app.route('/')
 def index():
+    role = session.get('role')  # Récupération du rôle dans la session
     utilisateur = session.get('utilisateur')
+
     notes = []
     if utilisateur:
         conn = get_db_connection()
@@ -58,13 +60,18 @@ def index():
                 cursor = conn.cursor(dictionary=True)
                 cursor.execute("SELECT id FROM utilisateurs WHERE nom_utilisateur = %s", (utilisateur,))
                 utilisateur_data = cursor.fetchone()
+
                 if utilisateur_data:
                     utilisateur_id = utilisateur_data['id']
                     cursor.execute("SELECT * FROM notes WHERE utilisateur_id = %s", (utilisateur_id,))
                     notes = cursor.fetchall()
+            except Error as e:
+                flash(f"Erreur lors de la récupération des notes : {e}", "danger")
             finally:
                 conn.close()
-    return render_template('index.html', utilisateur=utilisateur, notes=notes)
+
+    return render_template('index.html', utilisateur=utilisateur, notes=notes, role=role)
+
 
 @app.route('/ajouter_utilisateur', methods=['GET', 'POST'])
 def ajouter_utilisateur():
@@ -111,7 +118,6 @@ def ajouter_utilisateur():
 @app.route('/connexion', methods=['GET', 'POST'])
 def connexion():
     if request.method == 'POST':
-        role = request.form.get('role')
         nom_utilisateur = request.form['nom_utilisateur']
         mot_de_passe = request.form['mot_de_passe']
 
@@ -119,23 +125,34 @@ def connexion():
             flash("Le nom d'utilisateur et le mot de passe sont requis.", "danger")
             return redirect(url_for('connexion'))
 
-        table = "utilisateurs" if role == "eleve" else "profs"
-
         conn = get_db_connection()
         if conn:
             try:
                 cursor = conn.cursor(dictionary=True)
-                query = f"SELECT * FROM {table} WHERE nom_utilisateur = %s AND mot_de_passe = %s"
-                cursor.execute(query, (nom_utilisateur, mot_de_passe))
+                
+                # Vérifie si l'utilisateur est un élève
+                cursor.execute("SELECT * FROM utilisateurs WHERE nom_utilisateur = %s AND mot_de_passe = %s", 
+                               (nom_utilisateur, mot_de_passe))
                 utilisateur = cursor.fetchone()
 
                 if utilisateur:
                     session['utilisateur'] = utilisateur['nom_utilisateur']
-                    session['role'] = role
-                    flash("Connexion réussie!", "success")
+                    session['role'] = 'eleve'
+                    flash("Connexion réussie en tant qu'élève !", "success")
                     return redirect(url_for('index'))
-                else:
-                    flash("Nom d'utilisateur ou mot de passe incorrect.", "danger")
+
+                # Vérifie si l'utilisateur est un professeur
+                cursor.execute("SELECT * FROM profs WHERE nom_utilisateur = %s AND mot_de_passe = %s", 
+                               (nom_utilisateur, mot_de_passe))
+                prof = cursor.fetchone()
+
+                if prof:
+                    session['utilisateur'] = prof['nom_utilisateur']
+                    session['role'] = 'prof'
+                    flash("Connexion réussie en tant que professeur !", "success")
+                    return redirect(url_for('index'))
+
+                flash("Nom d'utilisateur ou mot de passe incorrect.", "danger")
             except mysql.connector.Error as err:
                 flash(f"Erreur de connexion : {err}", "danger")
             finally:
@@ -144,6 +161,7 @@ def connexion():
             flash("Erreur de connexion à la base de données", "danger")
 
     return render_template('connexion.html')
+
 
 
 
@@ -173,45 +191,59 @@ def supprimer_compte():
 
 @app.route('/ajouter_note', methods=['GET', 'POST'])
 def ajouter_note():
-    if 'utilisateur' in session:
+    # Vérifie si l'utilisateur est connecté et si c'est un professeur
+    if 'utilisateur' in session and session.get('role') == 'prof':
+        conn = get_db_connection()
+        
         if request.method == 'POST':
             note = request.form['note']
+            eleve_id = request.form['eleve_id']
 
-            # Validation pour s'assurer que la note est un nombre valide
+            if not note or not eleve_id:
+                flash("Tous les champs sont requis.", "danger")
+                return redirect(url_for('ajouter_note'))
+
             try:
-                note_valeur = float(note)
-                if not (0 <= note_valeur <= 20):
+                note = float(note)
+                if note < 0 or note > 20:
                     flash("La note doit être comprise entre 0 et 20.", "danger")
                     return redirect(url_for('ajouter_note'))
+                note = round(note, 1)
             except ValueError:
                 flash("Veuillez entrer une note valide.", "danger")
                 return redirect(url_for('ajouter_note'))
 
-            conn = get_db_connection()
-            if conn:
-                try:
-                    cursor = conn.cursor(dictionary=True)
-                    cursor.execute("SELECT id FROM utilisateurs WHERE nom_utilisateur = %s", (session['utilisateur'],))
-                    utilisateur = cursor.fetchone()
+            try:
+                cursor = conn.cursor()
+                cursor.execute("SELECT id FROM utilisateurs WHERE id = %s", (eleve_id,))
+                eleve = cursor.fetchone()
+                
+                if eleve:
+                    cursor.execute(
+                        "INSERT INTO notes (utilisateur_id, note) VALUES (%s, %s)", 
+                        (eleve_id, note)
+                    )
+                    conn.commit()
+                    flash("Note ajoutée avec succès pour l'élève.", "success")
+                else:
+                    flash("Élève introuvable.", "danger")
+            except Error as e:
+                flash(f"Erreur lors de l'ajout de la note : {e}", "danger")
+                conn.rollback()
+            finally:
+                conn.close()
 
-                    if utilisateur:
-                        utilisateur_id = utilisateur['id']
-                        cursor.execute("INSERT INTO notes (utilisateur_id, note) VALUES (%s, %s)", 
-                                       (utilisateur_id, note_valeur))
-                        conn.commit()
-                        flash("Note ajoutée avec succès!", "success")
-                        return redirect(url_for('index'))
-                except Error as e:
-                    flash(f"Erreur lors de l'ajout de la note : {e}", "danger")
-                    conn.rollback()
-                finally:
-                    conn.close()
-            else:
-                flash("Erreur de connexion à la base de données", "danger")
-                return redirect(url_for('index'))
-        return render_template('ajouter_note.html')
+            return redirect(url_for('index'))
+        else:
+            # Liste des élèves pour la sélection
+            if conn:
+                cursor = conn.cursor(dictionary=True)
+                cursor.execute("SELECT id, nom_utilisateur FROM utilisateurs")
+                eleves = cursor.fetchall()
+                conn.close()
+                return render_template('ajouter_note.html', eleves=eleves)
     else:
-        flash("Vous devez être connecté pour ajouter une note.", "danger")
+        flash("Vous devez être connecté en tant que professeur pour ajouter une note.", "danger")
         return redirect(url_for('connexion'))
 
 
