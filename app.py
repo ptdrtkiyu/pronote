@@ -138,7 +138,6 @@ def connexion():
             try:
                 cursor = conn.cursor(dictionary=True)
                 
-                # Vérifie si l'utilisateur est un élève
                 cursor.execute("SELECT * FROM utilisateurs WHERE nom_utilisateur = %s AND mot_de_passe = %s", 
                                (nom_utilisateur, mot_de_passe))
                 utilisateur = cursor.fetchone()
@@ -149,7 +148,6 @@ def connexion():
                     flash("Connexion réussie en tant qu'élève !", "success")
                     return redirect(url_for('index'))
 
-                # Vérifie si l'utilisateur est un professeur
                 cursor.execute("SELECT * FROM profs WHERE nom_utilisateur = %s AND mot_de_passe = %s", 
                                (nom_utilisateur, mot_de_passe))
                 prof = cursor.fetchone()
@@ -199,7 +197,6 @@ def supprimer_compte():
 
 @app.route('/ajouter_note', methods=['GET', 'POST'])
 def ajouter_note():
-    # Vérifie si l'utilisateur est connecté et si c'est un professeur
     if 'utilisateur' in session and session.get('role') == 'prof':
         conn = get_db_connection()
         
