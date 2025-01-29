@@ -235,7 +235,6 @@ def ajouter_note():
 
             return redirect(url_for('index'))
         else:
-            # Liste des élèves pour la sélection
             if conn:
                 cursor = conn.cursor(dictionary=True)
                 cursor.execute("SELECT id, nom_utilisateur FROM utilisateurs")
