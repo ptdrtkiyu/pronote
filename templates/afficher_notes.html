@@ -13,14 +13,12 @@
             <thead>
                 <tr>
                     <th>Note</th>
-                    <th>Date</th>
                 </tr>
             </thead>
             <tbody>
                 {% for note in notes %}
                     <tr>
                         <td>{{ note['note'] }}</td>
-                        <td>{{ note['date_note'] }}</td>
                     </tr>
                 {% endfor %}
             </tbody>

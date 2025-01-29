@@ -181,7 +181,6 @@ def connexion():
                 if utilisateur:
                     session['utilisateur'] = utilisateur['nom_utilisateur']
                     session['role'] = 'eleve'
-                    flash("Connexion réussie en tant qu'élève !", "success")
                     return redirect(url_for('index'))
 
                 cursor.execute("SELECT * FROM profs WHERE nom_utilisateur = %s AND mot_de_passe = %s", 
@@ -191,7 +190,6 @@ def connexion():
                 if prof:
                     session['utilisateur'] = prof['nom_utilisateur']
                     session['role'] = 'prof'
-                    flash("Connexion réussie en tant que professeur !", "success")
                     return redirect(url_for('index'))
 
                 flash("Nom d'utilisateur ou mot de passe incorrect.", "danger")
@@ -210,7 +208,6 @@ def connexion():
 @app.route('/deconnexion')
 def deconnexion():
     session.pop('utilisateur', None)
-    flash("Déconnexion réussie.", "success")
     return redirect(url_for('index'))
 
 

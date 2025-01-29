@@ -70,9 +70,7 @@
 
     <a href="{{ url_for('deconnexion') }}"><button>Déconnexion</button></a>
     <br><br>
-    {% if role == 'eleve' %}
-        <a href="{{ url_for('index') }}"><button>Retour au menu</button></a>
-    {% endif %}
+    
     
     {% else %}
     <h1>Bienvenue sur Pronote</h1>
