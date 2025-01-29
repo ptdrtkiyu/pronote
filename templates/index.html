@@ -15,21 +15,25 @@
             <table border="1">
                 <thead>
                     <tr>
-                        {% for nom_eleve in notes_par_eleve.keys() %}
-                            <th>{{ nom_eleve }}</th>
-                        {% endfor %}
+                        <th>Nom de l'élève</th>
+                        <th>Matière</th>
+                        <th>Notes</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr>
-                        {% for notes in notes_par_eleve.values() %}
-                            <td>
-                                {% for note in notes %}
-                                    {{ note }}<br>
-                                {% endfor %}
-                            </td>
-                        {% endfor %}
-                    </tr>
+                    {% for nom_eleve, matieres in notes_par_eleve.items() %}
+                        <tr>
+                            <td rowspan="{{ matieres|length }}">{{ nom_eleve }}</td>
+                            {% for matiere, notes in matieres.items() %}
+                                <td>{{ matiere }}</td>
+                                <td>
+                                    {% for note in notes %}
+                                        <p>{{ note['note'] }} </p>
+                                    {% endfor %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                    {% endfor %}
                 </tbody>
             </table>
         {% else %}
@@ -41,25 +45,39 @@
     {% elif role == 'eleve' %}
         <h2>Vos notes :</h2>
         {% if notes_par_eleve %}
-            <ul>
-                {% for note in notes_par_eleve.values() %}
-                    <li>{{ note }}</li>
-                {% endfor %}
-            </ul>
+            <table border="1">
+                <thead>
+                    <tr>
+                        <th>Matière</th>
+                        <th>Note</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for matiere, notes in notes_par_eleve[utilisateur].items() %}
+                        <tr>
+                            <td rowspan="{{ notes|length }}">{{ matiere }}</td>
+                            {% for note in notes %}
+                                <td>{{ note['note'] }}</td>
+                            </tr>
+                            {% endfor %}
+                    {% endfor %}
+                </tbody>
+            </table>
         {% else %}
             <p>Aucune note trouvée.</p>
         {% endif %}
     {% endif %}
 
-    <a href="{{ url_for('deconnexion') }}">Déconnexion</a>
-{% else %}
+    <a href="{{ url_for('deconnexion') }}"><button>Déconnexion</button></a>
+    <br><br>
+    {% if role == 'eleve' %}
+        <a href="{{ url_for('index') }}"><button>Retour au menu</button></a>
+    {% endif %}
+    
+    {% else %}
     <h1>Bienvenue sur Pronote</h1>
     <a href="{{ url_for('connexion') }}">Connexion</a>
     <a href="{{ url_for('ajouter_utilisateur') }}">Créer un utilisateur</a>
-{% endif %}
-
-
-
-
+    {% endif %}
 </body>
 </html>

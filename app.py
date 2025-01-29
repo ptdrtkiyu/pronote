@@ -41,6 +41,8 @@ def init_db():
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 utilisateur_id INT,
                 note TEXT NOT NULL,
+                matiere ENUM('Français', 'Maths', 'Histoire', 'Géographie') NOT NULL,  -- Ajout de la colonne matiere
+
                 date_note TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (utilisateur_id) REFERENCES utilisateurs(id)
             )
@@ -55,28 +57,62 @@ def index():
 
     notes_par_eleve = {}
 
-    if utilisateur and role == 'prof':
+    if utilisateur:
         conn = get_db_connection()
         if conn:
             try:
                 cursor = conn.cursor(dictionary=True)
-                cursor.execute('''
-                    SELECT u.nom_utilisateur, n.note 
-                    FROM notes n
-                    JOIN utilisateurs u ON n.utilisateur_id = u.id
-                ''')
-                for row in cursor.fetchall():
-                    nom = row['nom_utilisateur']
-                    note = row['note']
-                    if nom not in notes_par_eleve:
-                        notes_par_eleve[nom] = []
-                    notes_par_eleve[nom].append(note)
+
+                if role == 'prof':
+                    cursor.execute('''
+                        SELECT u.nom_utilisateur, n.note, n.matiere, n.date_note 
+                        FROM notes n
+                        JOIN utilisateurs u ON n.utilisateur_id = u.id
+                    ''')
+
+                    for row in cursor.fetchall():
+                        nom = row['nom_utilisateur']
+                        note = row['note']
+                        matiere = row['matiere']
+                        date_note = row['date_note']
+                        
+                        if nom not in notes_par_eleve:
+                            notes_par_eleve[nom] = {}
+
+                        if matiere not in notes_par_eleve[nom]:
+                            notes_par_eleve[nom][matiere] = []
+
+                        notes_par_eleve[nom][matiere].append({'note': note, 'date_note': date_note})
+
+                elif role == 'eleve':
+                    cursor.execute('''
+                        SELECT n.matiere, n.note, n.date_note
+                        FROM notes n
+                        JOIN utilisateurs u ON n.utilisateur_id = u.id
+                        WHERE u.nom_utilisateur = %s
+                    ''', (utilisateur,))
+
+                    notes_par_eleve[utilisateur] = {}
+
+                    for row in cursor.fetchall():
+                        matiere = row['matiere']
+                        note = row['note']
+                        date_note = row['date_note']
+                        
+                        if matiere not in notes_par_eleve[utilisateur]:
+                            notes_par_eleve[utilisateur][matiere] = []
+
+                        notes_par_eleve[utilisateur][matiere].append({'note': note, 'date_note': date_note})
+
             except Error as e:
                 flash(f"Erreur lors de la récupération des notes : {e}", "danger")
             finally:
                 conn.close()
 
     return render_template('index.html', utilisateur=utilisateur, role=role, notes_par_eleve=notes_par_eleve)
+
+
+
 
 
 
@@ -203,8 +239,9 @@ def ajouter_note():
         if request.method == 'POST':
             note = request.form['note']
             eleve_id = request.form['eleve_id']
+            matiere = request.form['matiere']
 
-            if not note or not eleve_id:
+            if not note or not eleve_id or not matiere:
                 flash("Tous les champs sont requis.", "danger")
                 return redirect(url_for('ajouter_note'))
 
@@ -225,8 +262,8 @@ def ajouter_note():
                 
                 if eleve:
                     cursor.execute(
-                        "INSERT INTO notes (utilisateur_id, note) VALUES (%s, %s)", 
-                        (eleve_id, note)
+                        "INSERT INTO notes (utilisateur_id, note, matiere) VALUES (%s, %s, %s)", 
+                        (eleve_id, note, matiere)
                     )
                     conn.commit()
                     flash("Note ajoutée avec succès pour l'élève.", "success")
