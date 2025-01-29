@@ -41,6 +41,7 @@ def init_db():
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 utilisateur_id INT,
                 note TEXT NOT NULL,
+                date_note TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (utilisateur_id) REFERENCES utilisateurs(id)
             )
         ''')
