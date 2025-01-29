@@ -30,6 +30,13 @@ def init_db():
             )
         ''')
         cursor.execute('''
+            CREATE TABLE IF NOT EXISTS profs (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                nom_utilisateur VARCHAR(100) NOT NULL,
+                mot_de_passe VARCHAR(100) NOT NULL
+            )
+        ''')
+        cursor.execute('''
             CREATE TABLE IF NOT EXISTS notes (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 utilisateur_id INT,
@@ -62,76 +69,82 @@ def index():
 @app.route('/ajouter_utilisateur', methods=['GET', 'POST'])
 def ajouter_utilisateur():
     if request.method == 'POST':
+        role = request.form.get('role')
         nom_utilisateur = request.form['nom_utilisateur']
         mot_de_passe = request.form['mot_de_passe']
-        
+
         if not nom_utilisateur or not mot_de_passe:
             flash("Le nom d'utilisateur et le mot de passe sont requis.", "danger")
             return redirect(url_for('ajouter_utilisateur'))
+
+        table = "utilisateurs" if role == "eleve" else "profs"
 
         conn = get_db_connection()
         if conn:
             try:
                 cursor = conn.cursor()
-                cursor.execute("SELECT * FROM utilisateurs WHERE nom_utilisateur = %s", (nom_utilisateur,))
+                query = f"SELECT * FROM {table} WHERE nom_utilisateur = %s"
+                cursor.execute(query, (nom_utilisateur,))
                 utilisateur_existant = cursor.fetchone()
 
                 if utilisateur_existant:
                     flash("Cet utilisateur existe déjà.", "danger")
-                    return redirect(url_for('ajouter'))
+                    return redirect(url_for('ajouter_utilisateur'))
 
-                cursor.execute("INSERT INTO utilisateurs (nom_utilisateur, mot_de_passe) VALUES (%s, %s)", 
-                               (nom_utilisateur, mot_de_passe))
+                query_insert = f"INSERT INTO {table} (nom_utilisateur, mot_de_passe) VALUES (%s, %s)"
+                cursor.execute(query_insert, (nom_utilisateur, mot_de_passe))
                 conn.commit()
-                flash("Utilisateur ajouté avec succès!", "success")
-                return redirect(url_for('index'))  
+                flash("Compte créé avec succès!", "success")
+                return redirect(url_for('index'))
             except Error as e:
-                flash(f"Erreur lors de l'ajout de l'utilisateur : {e}", "danger")
-                conn.rollback()  
+                flash(f"Erreur lors de la création de l'utilisateur : {e}", "danger")
+                conn.rollback()
             finally:
-                conn.close()  
+                conn.close()
         else:
             flash("Erreur de connexion à la base de données", "danger")
-            return redirect(url_for('index'))
 
     return render_template('ajouter_utilisateur.html')
+
 
 
 @app.route('/connexion', methods=['GET', 'POST'])
 def connexion():
     if request.method == 'POST':
+        role = request.form.get('role')
         nom_utilisateur = request.form['nom_utilisateur']
         mot_de_passe = request.form['mot_de_passe']
-        
+
         if not nom_utilisateur or not mot_de_passe:
             flash("Le nom d'utilisateur et le mot de passe sont requis.", "danger")
             return redirect(url_for('connexion'))
 
+        table = "utilisateurs" if role == "eleve" else "profs"
+
         conn = get_db_connection()
         if conn:
             try:
-                cursor = conn.cursor(dictionary=True)  
-                cursor.execute("SELECT * FROM utilisateurs WHERE nom_utilisateur = %s AND mot_de_passe = %s", 
-                               (nom_utilisateur, mot_de_passe))
+                cursor = conn.cursor(dictionary=True)
+                query = f"SELECT * FROM {table} WHERE nom_utilisateur = %s AND mot_de_passe = %s"
+                cursor.execute(query, (nom_utilisateur, mot_de_passe))
                 utilisateur = cursor.fetchone()
 
                 if utilisateur:
-                    session['utilisateur'] = utilisateur['nom_utilisateur']  
+                    session['utilisateur'] = utilisateur['nom_utilisateur']
+                    session['role'] = role
                     flash("Connexion réussie!", "success")
-                    return redirect(url_for('index'))  
+                    return redirect(url_for('index'))
                 else:
                     flash("Nom d'utilisateur ou mot de passe incorrect.", "danger")
-                    return redirect(url_for('connexion'))
             except mysql.connector.Error as err:
                 flash(f"Erreur de connexion : {err}", "danger")
-                return redirect(url_for('connexion'))
             finally:
                 conn.close()
         else:
             flash("Erreur de connexion à la base de données", "danger")
-            return redirect(url_for('connexion'))
 
     return render_template('connexion.html')
+
 
 
 @app.route('/deconnexion')
