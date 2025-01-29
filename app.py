@@ -49,28 +49,35 @@ def init_db():
 
 @app.route('/')
 def index():
-    role = session.get('role')  # Récupération du rôle dans la session
+    role = session.get('role')
     utilisateur = session.get('utilisateur')
 
-    notes = []
-    if utilisateur:
+    notes_par_eleve = {}
+
+    if utilisateur and role == 'prof':
         conn = get_db_connection()
         if conn:
             try:
                 cursor = conn.cursor(dictionary=True)
-                cursor.execute("SELECT id FROM utilisateurs WHERE nom_utilisateur = %s", (utilisateur,))
-                utilisateur_data = cursor.fetchone()
-
-                if utilisateur_data:
-                    utilisateur_id = utilisateur_data['id']
-                    cursor.execute("SELECT * FROM notes WHERE utilisateur_id = %s", (utilisateur_id,))
-                    notes = cursor.fetchall()
+                cursor.execute('''
+                    SELECT u.nom_utilisateur, n.note 
+                    FROM notes n
+                    JOIN utilisateurs u ON n.utilisateur_id = u.id
+                ''')
+                for row in cursor.fetchall():
+                    nom = row['nom_utilisateur']
+                    note = row['note']
+                    if nom not in notes_par_eleve:
+                        notes_par_eleve[nom] = []
+                    notes_par_eleve[nom].append(note)
             except Error as e:
                 flash(f"Erreur lors de la récupération des notes : {e}", "danger")
             finally:
                 conn.close()
 
-    return render_template('index.html', utilisateur=utilisateur, notes=notes, role=role)
+    return render_template('index.html', utilisateur=utilisateur, role=role, notes_par_eleve=notes_par_eleve)
+
+
 
 
 @app.route('/ajouter_utilisateur', methods=['GET', 'POST'])
