@@ -43,6 +43,14 @@
             {% endif %}
 
             <a href="{{ url_for('ajouter_note') }}"><button>Ajouter une note</button></a>
+        {%elif role == 'admin' %}
+            <a href="{{ url_for('ajouter_utilisateur') }}">
+                <button style="margin-bottom: 20px;">Créer un utilisateur</button>
+            </a>
+            
+            <a href="{{ url_for('ajouter_matiere') }}">
+                <button style="margin-top: 20px;">Ajouter une matière</button>
+            </a>
 
         {% elif role == 'eleve' %}
             <h2>Vos notes :</h2>
@@ -76,8 +84,7 @@
         <h1>Bienvenue sur Pronote</h1>
         <div class="login-links">
             <a href="{{ url_for('connexion') }}">Connexion</a>
-            <a href="{{ url_for('ajouter_utilisateur') }}">Créer un utilisateur</a>
-        </div>
+            
         {% endif %}
     </div>
 </body>

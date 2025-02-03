@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ajouter une matière</title>
+</head>
+<body>
+    <h1>Ajouter une nouvelle matière</h1>
+    <form method="POST">
+        <label for="nom_matiere">Nom de la matière :</label>
+        <input type="text" id="nom_matiere" name="nom_matiere" required>
+        <button type="submit">Ajouter</button>
+    </form>
+    <a href="{{ url_for('index') }}">Retour</a>
+</body>
+</html>

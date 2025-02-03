@@ -6,16 +6,16 @@
     <title>Ajouter un utilisateur</title>
 </head>
 <body>
-    <h1>Ajouter un utilisateur</h1>
+    <h1>Créer un compte utilisateur</h1>
+    
     <form method="POST">
-        <label>Vous êtes :</label>
-        <input type="radio" id="eleve" name="role" value="eleve" required>
-        <label for="eleve">Élève</label>
+        <label for="role">Rôle :</label>
+        <select id="role" name="role" required>
+            <option value="eleve">Élève</option>
+            <option value="prof">Professeur</option>
+        </select>
     
-        <input type="radio" id="prof" name="role" value="prof" required>
-        <label for="prof">Professeur</label>
-    
-        <br>
+        <br><br>
         <label for="nom_utilisateur">Nom d'utilisateur :</label>
         <input type="text" id="nom_utilisateur" name="nom_utilisateur" required>
     
@@ -25,7 +25,7 @@
         <button type="submit">Créer un compte</button>
     </form>
     
-
+    <br>
     <a href="{{ url_for('index') }}"><button>Retour au menu</button></a>
 </body>
 </html>

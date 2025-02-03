@@ -25,8 +25,9 @@ def init_db():
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS utilisateurs (
                 id INT AUTO_INCREMENT PRIMARY KEY,
-                nom_utilisateur VARCHAR(100) NOT NULL,
-                mot_de_passe VARCHAR(100) NOT NULL
+                nom_utilisateur VARCHAR(100) UNIQUE NOT NULL,
+                mot_de_passe VARCHAR(255) NOT NULL,
+                role ENUM('eleve', 'prof', 'admin') DEFAULT 'eleve'
             )
         ''')
         cursor.execute('''
@@ -41,15 +42,29 @@ def init_db():
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 utilisateur_id INT,
                 note FLOAT NOT NULL,
-                matiere ENUM('Français', 'Maths', 'Histoire', 'Géographie') NOT NULL,  -- Ajout de la colonne matiere
-
+                matiere_id INT,
                 date_note TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (utilisateur_id) REFERENCES utilisateurs(id)
+                FOREIGN KEY (utilisateur_id) REFERENCES utilisateurs(id),
+                FOREIGN KEY (matiere_id) REFERENCES matieres(id)
+
             )
         ''')
-        conn.commit()
-        conn.close()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS matieres (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                nom_matiere VARCHAR(100) NOT NULL UNIQUE
+            )
+        ''')
 
+        cursor.execute("SELECT * FROM utilisateurs WHERE role = 'admin'")
+        admin_existant = cursor.fetchone()
+
+        if not admin_existant:
+            cursor.execute("INSERT INTO utilisateurs (nom_utilisateur, mot_de_passe, role) VALUES (%s, %s, %s)",
+                           ('admin', 'admin123', 'admin'))
+            conn.commit()
+
+        conn.close()
 @app.route('/')
 def index():
     role = session.get('role')
@@ -65,15 +80,16 @@ def index():
 
                 if role == 'prof':
                     cursor.execute('''
-                        SELECT u.nom_utilisateur, n.note, n.matiere, n.date_note 
+                        SELECT u.nom_utilisateur, n.note, m.nom_matiere, n.date_note 
                         FROM notes n
                         JOIN utilisateurs u ON n.utilisateur_id = u.id
+                        JOIN matieres m ON n.matiere_id = m.id
                     ''')
 
                     for row in cursor.fetchall():
                         nom = row['nom_utilisateur']
                         note = row['note']
-                        matiere = row['matiere']
+                        matiere = row['nom_matiere']  
                         date_note = row['date_note']
                         
                         if nom not in notes_par_eleve:
@@ -86,16 +102,17 @@ def index():
 
                 elif role == 'eleve':
                     cursor.execute('''
-                        SELECT n.matiere, n.note, n.date_note
+                        SELECT m.nom_matiere, n.note, n.date_note
                         FROM notes n
                         JOIN utilisateurs u ON n.utilisateur_id = u.id
+                        JOIN matieres m ON n.matiere_id = m.id
                         WHERE u.nom_utilisateur = %s
                     ''', (utilisateur,))
 
                     notes_par_eleve[utilisateur] = {}
 
                     for row in cursor.fetchall():
-                        matiere = row['matiere']
+                        matiere = row['nom_matiere']                          
                         note = row['note']
                         date_note = row['date_note']
                         
@@ -104,6 +121,7 @@ def index():
 
                         notes_par_eleve[utilisateur][matiere].append({'note': note, 'date_note': date_note})
 
+
             except Error as e:
                 flash(f"Erreur lors de la récupération des notes : {e}", "danger")
             finally:
@@ -111,14 +129,12 @@ def index():
 
     return render_template('index.html', utilisateur=utilisateur, role=role, notes_par_eleve=notes_par_eleve)
 
-
-
-
-
-
-
 @app.route('/ajouter_utilisateur', methods=['GET', 'POST'])
 def ajouter_utilisateur():
+    if 'utilisateur' not in session or session.get('role') != 'admin':
+        flash("Vous devez être un administrateur pour créer un compte utilisateur.", "danger")
+        return redirect(url_for('index'))
+
     if request.method == 'POST':
         role = request.form.get('role')
         nom_utilisateur = request.form['nom_utilisateur']
@@ -157,8 +173,6 @@ def ajouter_utilisateur():
 
     return render_template('ajouter_utilisateur.html')
 
-
-
 @app.route('/connexion', methods=['GET', 'POST'])
 def connexion():
     if request.method == 'POST':
@@ -180,7 +194,9 @@ def connexion():
 
                 if utilisateur:
                     session['utilisateur'] = utilisateur['nom_utilisateur']
-                    session['role'] = 'eleve'
+                    session['role'] = utilisateur['role']  
+                    return redirect(url_for('index'))
+
                     return redirect(url_for('index'))
 
                 cursor.execute("SELECT * FROM profs WHERE nom_utilisateur = %s AND mot_de_passe = %s", 
@@ -202,12 +218,12 @@ def connexion():
 
     return render_template('connexion.html')
 
-
-
-
 @app.route('/deconnexion')
 def deconnexion():
-    session.pop('utilisateur', None)
+    if 'utilisateur' in session:
+        session.pop('utilisateur', None)
+        session.pop('role', None)
+        flash("Vous avez été déconnecté avec succès.", "success")
     return redirect(url_for('index'))
 
 
@@ -227,18 +243,22 @@ def supprimer_compte():
         else:
             flash("Erreur de connexion à la base de données", "danger")
             return redirect(url_for('index'))
+    else:
+        flash("Vous devez être connecté pour supprimer votre compte.", "danger")
+        return redirect(url_for('index'))
 
 @app.route('/ajouter_note', methods=['GET', 'POST'])
 def ajouter_note():
     if 'utilisateur' in session and session.get('role') == 'prof':
         conn = get_db_connection()
-        
-        if request.method == 'POST':
-            note = request.form['note']
-            eleve_id = request.form['eleve_id']
-            matiere = request.form['matiere']
+        cursor = conn.cursor(dictionary=True)
 
-            if not note or not eleve_id or not matiere:
+        if request.method == 'POST':
+            note = request.form.get('note')
+            utilisateur_id = request.form.get('utilisateur_id')
+            matiere_id = request.form.get('matiere_id')
+
+            if not note or not utilisateur_id or not matiere_id:
                 flash("Tous les champs sont requis.", "danger")
                 return redirect(url_for('ajouter_note'))
 
@@ -252,38 +272,94 @@ def ajouter_note():
                 flash("Veuillez entrer une note valide.", "danger")
                 return redirect(url_for('ajouter_note'))
 
+            cursor.execute("SELECT id FROM utilisateurs WHERE id = %s AND role = 'eleve'", (utilisateur_id,))
+            utilisateur = cursor.fetchone()
+
+            if not utilisateur:
+                flash("L'utilisateur sélectionné n'est pas un élève.", "danger")
+                return redirect(url_for('ajouter_note'))
+
+            cursor.execute("SELECT id FROM matieres WHERE id = %s", (matiere_id,))
+            matiere = cursor.fetchone()
+
+            if not matiere:
+                flash("La matière sélectionnée n'existe pas.", "danger")
+                return redirect(url_for('ajouter_note'))
+
             try:
-                cursor = conn.cursor()
-                cursor.execute("SELECT id FROM utilisateurs WHERE id = %s", (eleve_id,))
-                eleve = cursor.fetchone()
-                
-                if eleve:
-                    cursor.execute(
-                        "INSERT INTO notes (utilisateur_id, note, matiere) VALUES (%s, %s, %s)", 
-                        (eleve_id, note, matiere)
-                    )
-                    conn.commit()
-                    flash("Note ajoutée avec succès pour l'élève.", "success")
-                else:
-                    flash("Élève introuvable.", "danger")
+                print(f"utilisateur_id: {utilisateur_id}, note: {note}, matiere_id: {matiere_id}")
+
+                cursor.execute(
+                    "INSERT INTO notes (utilisateur_id, note, matiere_id) VALUES (%s, %s, %s)",
+                    (utilisateur_id, note, matiere_id)
+                )
+                conn.commit()
+                flash("Note ajoutée avec succès.", "success")
             except Error as e:
                 flash(f"Erreur lors de l'ajout de la note : {e}", "danger")
                 conn.rollback()
+                print(f"Erreur d'insertion : {e}")  
             finally:
+                cursor.close()
                 conn.close()
 
             return redirect(url_for('index'))
         else:
-            if conn:
-                cursor = conn.cursor(dictionary=True)
-                cursor.execute("SELECT id, nom_utilisateur FROM utilisateurs")
-                eleves = cursor.fetchall()
-                conn.close()
-                return render_template('ajouter_note.html', eleves=eleves)
+            cursor.execute("SELECT id, nom_utilisateur FROM utilisateurs WHERE role = 'eleve'")
+            utilisateurs = cursor.fetchall()
+
+            cursor.execute("SELECT * FROM matieres")
+            matieres = cursor.fetchall()
+
+            cursor.close()
+            conn.close()
+            return render_template('ajouter_note.html', utilisateurs=utilisateurs, matieres=matieres)
     else:
         flash("Vous devez être connecté en tant que professeur pour ajouter une note.", "danger")
         return redirect(url_for('connexion'))
 
+
+
+
+
+
+
+
+        
+@app.route('/ajouter_matiere', methods=['GET', 'POST'])
+def ajouter_matiere():
+    if 'utilisateur' not in session or session.get('role') != 'admin':
+        flash("Vous devez être un administrateur pour ajouter une matière.", "danger")
+        return redirect(url_for('index'))
+
+    if request.method == 'POST':
+        nom_matiere = request.form['nom_matiere']
+
+        if not nom_matiere:
+            flash("Le nom de la matière est requis.", "danger")
+            return redirect(url_for('ajouter_matiere'))
+
+        conn = get_db_connection()
+        if conn:
+            try:
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM matieres WHERE nom_matiere = %s", (nom_matiere,))
+                if cursor.fetchone():
+                    flash("Cette matière existe déjà.", "danger")
+                else:
+                    cursor.execute("INSERT INTO matieres (nom_matiere) VALUES (%s)", (nom_matiere,))
+                    conn.commit()
+                    flash("Matière ajoutée avec succès.", "success")
+                return redirect(url_for('index'))
+            except Error as e:
+                flash(f"Erreur lors de l'ajout de la matière : {e}", "danger")
+                conn.rollback()
+            finally:
+                conn.close()
+        else:
+            flash("Erreur de connexion à la base de données", "danger")
+
+    return render_template('ajouter_matiere.html')
 
 
 if __name__ == '__main__':
