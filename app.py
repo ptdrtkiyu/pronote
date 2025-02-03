@@ -34,7 +34,11 @@ def init_db():
             CREATE TABLE IF NOT EXISTS profs (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 nom_utilisateur VARCHAR(100) NOT NULL,
-                mot_de_passe VARCHAR(100) NOT NULL
+                mot_de_passe VARCHAR(100) NOT NULL,
+                matiere_id INT,
+                FOREIGN KEY (matiere_id) REFERENCES matieres(id)
+
+
             )
         ''')
         cursor.execute('''
@@ -132,46 +136,60 @@ def index():
 @app.route('/ajouter_utilisateur', methods=['GET', 'POST'])
 def ajouter_utilisateur():
     if 'utilisateur' not in session or session.get('role') != 'admin':
-        flash("Vous devez être un administrateur pour créer un compte utilisateur.", "danger")
+        flash("Accès réservé à l'administrateur.", "danger")
         return redirect(url_for('index'))
 
     if request.method == 'POST':
         role = request.form.get('role')
         nom_utilisateur = request.form['nom_utilisateur']
         mot_de_passe = request.form['mot_de_passe']
+        matiere_id = request.form.get('matiere_id') if role == 'prof' else None
 
         if not nom_utilisateur or not mot_de_passe:
-            flash("Le nom d'utilisateur et le mot de passe sont requis.", "danger")
+            flash("Les champs sont obligatoires.", "danger")
             return redirect(url_for('ajouter_utilisateur'))
 
+        conn = get_db_connection()
+        cursor = conn.cursor()
         table = "utilisateurs" if role == "eleve" else "profs"
 
-        conn = get_db_connection()
-        if conn:
-            try:
-                cursor = conn.cursor()
-                query = f"SELECT * FROM {table} WHERE nom_utilisateur = %s"
-                cursor.execute(query, (nom_utilisateur,))
-                utilisateur_existant = cursor.fetchone()
+        try:
+            # Vérifier l'existence
+            cursor.execute(f"SELECT * FROM {table} WHERE nom_utilisateur = %s", (nom_utilisateur,))
+            if cursor.fetchone():
+                flash("Cet utilisateur existe déjà.", "danger")
+                return redirect(url_for('ajouter_utilisateur'))
 
-                if utilisateur_existant:
-                    flash("Cet utilisateur existe déjà.", "danger")
-                    return redirect(url_for('ajouter_utilisateur'))
+            # Insertion avec ou sans matière selon le rôle
+            if role == "prof" and matiere_id:
+                cursor.execute(
+                    "INSERT INTO profs (nom_utilisateur, mot_de_passe, matiere_id) VALUES (%s, %s, %s)",
+                    (nom_utilisateur, mot_de_passe, matiere_id)
+                )
+            else:
+                cursor.execute(
+                    f"INSERT INTO {table} (nom_utilisateur, mot_de_passe) VALUES (%s, %s)",
+                    (nom_utilisateur, mot_de_passe)
+                )
 
-                query_insert = f"INSERT INTO {table} (nom_utilisateur, mot_de_passe) VALUES (%s, %s)"
-                cursor.execute(query_insert, (nom_utilisateur, mot_de_passe))
-                conn.commit()
-                flash("Compte créé avec succès!", "success")
-                return redirect(url_for('index'))
-            except Error as e:
-                flash(f"Erreur lors de la création de l'utilisateur : {e}", "danger")
-                conn.rollback()
-            finally:
-                conn.close()
-        else:
-            flash("Erreur de connexion à la base de données", "danger")
+            conn.commit()
+            flash("Compte créé avec succès!", "success")
+            return redirect(url_for('index'))
+        except Error as e:
+            flash(f"Erreur : {e}", "danger")
+            conn.rollback()
+        finally:
+            conn.close()
 
-    return render_template('ajouter_utilisateur.html')
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM matieres")
+    matieres = cursor.fetchall()
+    cursor.close()
+    conn.close()
+
+    return render_template('ajouter_utilisateur.html', matieres=matieres)
+
 
 @app.route('/connexion', methods=['GET', 'POST'])
 def connexion():
@@ -279,6 +297,18 @@ def ajouter_note():
                 flash("L'utilisateur sélectionné n'est pas un élève.", "danger")
                 return redirect(url_for('ajouter_note'))
 
+            cursor.execute("SELECT matiere_id FROM profs WHERE nom_utilisateur = %s", (session['utilisateur'],))
+            prof_matiere = cursor.fetchone()
+
+            if not prof_matiere:
+                flash("Erreur : Le professeur n'a pas de matière associée.", "danger")
+                return redirect(url_for('ajouter_note'))
+
+            # Vérifier que la matière sélectionnée correspond à celle du professeur
+            if int(matiere_id) != prof_matiere['matiere_id']:
+                flash("Vous ne pouvez pas ajouter une note pour une matière qui ne vous est pas attribuée.", "danger")
+                return redirect(url_for('ajouter_note'))
+
             cursor.execute("SELECT id FROM matieres WHERE id = %s", (matiere_id,))
             matiere = cursor.fetchone()
 
@@ -287,8 +317,6 @@ def ajouter_note():
                 return redirect(url_for('ajouter_note'))
 
             try:
-                print(f"utilisateur_id: {utilisateur_id}, note: {note}, matiere_id: {matiere_id}")
-
                 cursor.execute(
                     "INSERT INTO notes (utilisateur_id, note, matiere_id) VALUES (%s, %s, %s)",
                     (utilisateur_id, note, matiere_id)
@@ -298,34 +326,36 @@ def ajouter_note():
             except Error as e:
                 flash(f"Erreur lors de l'ajout de la note : {e}", "danger")
                 conn.rollback()
-                print(f"Erreur d'insertion : {e}")  
+
             finally:
                 cursor.close()
                 conn.close()
 
             return redirect(url_for('index'))
         else:
+            # On ne récupère que la matière du professeur
+            cursor.execute("SELECT matiere_id FROM profs WHERE nom_utilisateur = %s", (session['utilisateur'],))
+            prof_matiere = cursor.fetchone()
+
+            if prof_matiere:
+                matiere_id = prof_matiere['matiere_id']
+                cursor.execute("SELECT * FROM matieres WHERE id = %s", (matiere_id,))
+                matieres = cursor.fetchall()  # Cela devrait normalement renvoyer une seule matière
+            else:
+                matieres = []
+
             cursor.execute("SELECT id, nom_utilisateur FROM utilisateurs WHERE role = 'eleve'")
             utilisateurs = cursor.fetchall()
 
-            cursor.execute("SELECT * FROM matieres")
-            matieres = cursor.fetchall()
-
             cursor.close()
             conn.close()
+
             return render_template('ajouter_note.html', utilisateurs=utilisateurs, matieres=matieres)
     else:
         flash("Vous devez être connecté en tant que professeur pour ajouter une note.", "danger")
         return redirect(url_for('connexion'))
 
 
-
-
-
-
-
-
-        
 @app.route('/ajouter_matiere', methods=['GET', 'POST'])
 def ajouter_matiere():
     if 'utilisateur' not in session or session.get('role') != 'admin':

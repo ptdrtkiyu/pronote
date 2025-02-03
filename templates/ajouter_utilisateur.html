@@ -3,29 +3,55 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ajouter un utilisateur</title>
+    <title>Créer un utilisateur</title>
 </head>
 <body>
     <h1>Créer un compte utilisateur</h1>
     
     <form method="POST">
-        <label for="role">Rôle :</label>
-        <select id="role" name="role" required>
+        <label for="role">Type de compte :</label>
+        <select id="role" name="role" onchange="toggleMatiere()" required>
+            <option value="">Sélectionnez un rôle</option>
             <option value="eleve">Élève</option>
             <option value="prof">Professeur</option>
         </select>
-    
+
         <br><br>
+    
         <label for="nom_utilisateur">Nom d'utilisateur :</label>
         <input type="text" id="nom_utilisateur" name="nom_utilisateur" required>
     
+        <br><br>
+    
         <label for="mot_de_passe">Mot de passe :</label>
         <input type="password" id="mot_de_passe" name="mot_de_passe" required>
+
+        <br><br>
     
-        <button type="submit">Créer un compte</button>
+        <div id="matiere_section" style="display: none;">
+            <label for="matiere">Matière :</label>
+            <select id="matiere" name="matiere_id">
+                <option value="">Sélectionnez une matière</option>
+                {% for matiere in matieres %}
+                    <option value="{{ matiere['id'] }}">{{ matiere['nom_matiere'] }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <br><br>
+
+        <button type="submit">Créer l'utilisateur</button>
     </form>
-    
+
     <br>
     <a href="{{ url_for('index') }}"><button>Retour au menu</button></a>
+
+    <script>
+        function toggleMatiere() {
+            const role = document.getElementById('role').value;
+            const matiereSection = document.getElementById('matiere_section');
+            matiereSection.style.display = (role === 'prof') ? 'block' : 'none';
+        }
+    </script>
 </body>
 </html>
